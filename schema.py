@@ -1,6 +1,9 @@
 # from fastapi import BaseModel 
+from datetime import date
 from decimal import Decimal
 from pydantic import BaseModel
+from typing import Union, List
+
 
 class OrderDetails(BaseModel):
     OrderID : int
@@ -40,12 +43,46 @@ class CategoryBase(BaseModel):
     Description: str 
 
 class CategoryCreate(CategoryBase):
-# khi có pass thì đầu vào khi post chỉ có thuộc tính trong CategoryBase
+# đầu vào khi post chỉ có thuộc tính trong CategoryBase
     pass
-# khi có id thì có thể nhập id hoặc không(AI)
+# có id thì có thể nhập id hoặc không(AI)
     # id: int
 
 class Category(CategoryBase):
     id: int
+    class Config:
+        from_attributes = True
+
+class DailyRevenue(BaseModel):
+    OrderDate: date
+    DailyRevenue: float
+    # class Config:
+    #     from_attributes = True
+
+class MonthlyRevenue(BaseModel):
+    Month: int
+    Year: int
+    MonthlyRevenue: float
+    # class Config:
+    #     from_attributes = True
+
+class YearlyRevenue(BaseModel):
+    Year: int
+    YearlyRevenue: float
+    # class Config:
+    #     from_attributes = True
+
+class Customer(BaseModel):
+    CustomerID : str
+    CompanyName : str
+    ContactName : str
+    ContactTitle : str
+    Address : str
+    City : str
+    PostalCode : str
+    Country : str
+    Phone : str
+    Fax : str
+
     class Config:
         from_attributes = True
