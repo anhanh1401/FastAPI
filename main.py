@@ -154,7 +154,78 @@ def get_product_stock(db: Session = Depends(get_db)):
         return {"Total_stock": total_stock, "Product": product_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 5. 
+@app.get("/employee-invoices/", response_model=List[schema.OrderDetails])
+def get_employee_invoices(employee_id: int, db: Session = Depends(get_db)):
+    # Sử dụng truy vấn SQL để lấy danh sách các hoá đơn của nhân viên
+    query = f"""
+    SELECT OD.*
+    FROM orderdetails OD
+    INNER JOIN orders O ON OD.OrderID = O.OrderID
+    WHERE O.EmployeeID = {employee_id}
+    """
     
+    # Thực hiện truy vấn SQL và lấy kết quả
+    result = pd.read_sql_query(query, db.connection())
+    
+    # Chuyển kết quả thành danh sách các bản ghi (records)
+    records = result.to_dict(orient='records')
+    
+    return records
+
+# 6
+@app.get("/customers", response_model=List[schema.Customer])
+def get_customers(db: Session = Depends(get_db)):
+    # Sử dụng truy vấn SQL để lấy tất cả thông tin về khách hàng
+    query = "SELECT * FROM customers"
+    
+    # Thực hiện truy vấn SQL và lấy kết quả
+    result = pd.read_sql_query(query, db.connection())
+    
+    # Chuyển kết quả thành danh sách các bản ghi (records)
+    records = result.to_dict(orient='records')
+    
+    return records
+
+# 7
+@app.get("/product-customers/", response_model=List[schema.Customer])
+def get_product_customers(product_id: int, db: Session = Depends(get_db)):
+    # Sử dụng truy vấn SQL để lấy danh sách các khách hàng đã mua sản phẩm dựa trên mã sản phẩm
+    query = f"""
+    SELECT C.*
+    FROM customers C
+    INNER JOIN orders O ON C.CustomerID = O.CustomerID
+    INNER JOIN orderdetails OD ON O.OrderID = OD.OrderID
+    WHERE OD.ProductID = {product_id}
+    """
+    
+    # Thực hiện truy vấn SQL và lấy kết quả
+    result = pd.read_sql_query(query, db.connection())
+    
+    # Chuyển kết quả thành danh sách các bản ghi (records)
+    records = result.to_dict(orient='records')
+    
+    return records
+
+@app.get("/employee-invoice-count/")
+def get_employee_invoice_count(employee_id: int, db: Session = Depends(get_db)):
+    # Sử dụng truy vấn SQL để đếm số lượng hoá đơn của nhân viên dựa trên mã nhân viên
+    query = f"""
+    SELECT EmployeeID, OrderID
+    FROM orders
+    WHERE EmployeeID = {employee_id}
+    """
+    
+    # Thực hiện truy vấn SQL và lấy kết quả
+    result = pd.read_sql_query(query, db.connection())
+    
+    # Lấy số lượng hoá đơn từ kết quả truy vấn
+    invoice_count = np.array([result["OrderID"]]).size
+    
+    # Trả về kết quả dưới dạng JSON
+    return {"employee_id": employee_id, "invoice_count": invoice_count}
+
 
 # Phương thức POST
 # 1. Thêm danh mục sản phẩm
@@ -292,4 +363,58 @@ async def upload_csv_to_customers(file: UploadFile , db: Session = Depends(get_d
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-        
+
+
+@app.post("/categories/", response_model=schema.Category)
+def create_category(category: schema.Category, db: Session = Depends(get_db)):
+    # Tạo một đối tượng thể loại sản phẩm từ dữ liệu được gửi lên
+    db_category = model.Category(**category.dict())
+    
+    # Thêm đối tượng thể loại sản phẩm vào cơ sở dữ liệu
+    db.add(db_category)
+    
+    try:
+        # Commit thay đổi vào cơ sở dữ liệu
+        db.commit()
+        # Làm mới đối tượng để lấy thông tin đã được lưu vào cơ sở dữ liệu
+        db.refresh(db_category)
+        return db_category
+    except Exception as e:
+        # Xử lý lỗi nếu có lỗi trong quá trình tạo mới
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to create category: {str(e)}")
+    
+
+@app.post("/orders/")
+def create_order(order: schema.OrderCreate, db: Session = Depends(get_db)):
+    # Validate order data using NumPy
+    valid_order = np.all(order.OrderDate is not None)
+
+    if not valid_order:
+        raise HTTPException(status_code=400, detail="Invalid order data")
+
+    # Create a new order and add it to the database
+    db_order = model.Orders(**order.dict(exclude={"Products"}))
+    db.add(db_order)
+    db.commit()
+    db.refresh(db_order)
+
+    # Create OrderDetails records for each product in the order
+    for product_data in order.Products:
+        valid_product_data = np.all(product_data.UnitPrice > 0) and np.all(product_data.Quantity > 0)
+        if not valid_product_data:
+            raise HTTPException(status_code=400, detail="Invalid product data")
+
+        db_order_detail = model.OrderDetails(
+            OrderID=db_order.OrderID,
+            ProductID=product_data.ProductID,
+            Quantity=product_data.Quantity,
+            UnitPrice=product_data.UnitPrice,
+            Discount=product_data.Discount
+        )
+        db.add(db_order_detail)
+
+    db.commit()
+    db.refresh(db_order)
+
+    return db_order      

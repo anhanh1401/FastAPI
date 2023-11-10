@@ -1,5 +1,5 @@
 # from fastapi import BaseModel 
-from datetime import date
+from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel
 from typing import Union, List
@@ -86,3 +86,18 @@ class Customer(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OrderProductCreate(BaseModel):
+    ProductID: int
+    Quantity: int
+    UnitPrice: float
+    Discount: float
+
+class OrderCreate(BaseModel):
+    CustomerID: str
+    EmployeeID: int
+    OrderDate: datetime
+    Products: List[OrderProductCreate]
+
+    
