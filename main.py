@@ -4,11 +4,10 @@ from webbrowser import get
 from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import pymysql  # hoặc import mysqlclient
+from enum import Enum
 import pandas as pd
 import numpy as np
-
-from enum import Enum
+# import pymysql  # hoặc import mysqlclient
 
 from main import model, schema
 from .database import SessionLocal, engine
@@ -102,6 +101,7 @@ def get_monthly_revenue(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Đã xuất hiện lỗi: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
 def get_yearly_revenue(db: Session = Depends(get_db)):
     query = """
         SELECT 
@@ -155,7 +155,7 @@ def get_product_stock(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 5. 
+# 5. Danh sách hóa đơn theo EmployeeID
 @app.get("/employee-invoices/", response_model=List[schema.OrderDetails])
 def get_employee_invoices(employee_id: int, db: Session = Depends(get_db)):
     # Sử dụng truy vấn SQL để lấy danh sách các hoá đơn của nhân viên
@@ -174,21 +174,16 @@ def get_employee_invoices(employee_id: int, db: Session = Depends(get_db)):
     
     return records
 
-# 6
-@app.get("/customers", response_model=List[schema.Customer])
-def get_customers(db: Session = Depends(get_db)):
-    # Sử dụng truy vấn SQL để lấy tất cả thông tin về khách hàng
-    query = "SELECT * FROM customers"
-    
-    # Thực hiện truy vấn SQL và lấy kết quả
-    result = pd.read_sql_query(query, db.connection())
-    
-    # Chuyển kết quả thành danh sách các bản ghi (records)
-    records = result.to_dict(orient='records')
-    
-    return records
+# 6. Danh sách khách hàng
+@app.get("/customers/", response_model=List[schema.Customer])
+def read_od11(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    items = db.query(model.Customer).offset(skip).limit(limit).all()
+    df = pd.DataFrame([item.__dict__ for item in items])
+    df["Fax"] = df["Fax"].fillna("N/A")
+    df["PostalCode"] = df["PostalCode"].fillna("N/A")
+    return df.to_dict(orient="records")
 
-# 7
+# 7. Danh sách khách hàng đã mua sản phẩm theo ProductID
 @app.get("/product-customers/", response_model=List[schema.Customer])
 def get_product_customers(product_id: int, db: Session = Depends(get_db)):
     # Sử dụng truy vấn SQL để lấy danh sách các khách hàng đã mua sản phẩm dựa trên mã sản phẩm
@@ -208,6 +203,7 @@ def get_product_customers(product_id: int, db: Session = Depends(get_db)):
     
     return records
 
+# 8. Đếm số lượng hóa đơn của 1 nhân viên
 @app.get("/employee-invoice-count/")
 def get_employee_invoice_count(employee_id: int, db: Session = Depends(get_db)):
     # Sử dụng truy vấn SQL để đếm số lượng hoá đơn của nhân viên dựa trên mã nhân viên
@@ -239,28 +235,24 @@ def create_category(cate: schema.CategoryCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="CategoryName already exists")
     
     db_cate = model.Category(CategoryName = cate.CategoryName, Description = cate.Description)
-    db.add(db_cate)
-    db.commit()
-    db.refresh(db_cate)
-    return db_cate
+    if len(db_cate.CategoryName) > 15:
+        db_cate.CategoryName = np.where(len(db_cate.CategoryName) > 15, db_cate.CategoryName[:15], db_cate.CategoryName)
 
-# @app.post("/category", description='Add categories')
-# def create_cate(cate: schema.CategoryCreate, db: Session = Depends(get_db)):
-#     if not cate.CategoryName or not cate.Description:
-#         raise HTTPException(status_code=400, detail="All fields must be provided")
-#     db_cate = db.query(model.Category).filter(model.Category.CategoryName == cate.CategoryName).first()
-#     if db_cate:
-#         raise HTTPException(status_code=400, detail="CategoryName already exists")
-#     df = pd.DataFrame([{"CategoryName": cate.CategoryName, "Description": cate.Description}])
+    try:
+        db.add(db_cate)
+        db.commit()
+        # Làm mới đối tượng để lấy thông tin đã được lưu vào cơ sở dữ liệu
+        db.refresh(db_cate)
+        return db_cate
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to create category: {str(e)}")
 
-#     df.to_sql("categories", engine, if_exists='append', index=False)
-#     db.commit()
-
-#     return {"message": "Category added successfully"}
 
 # 2. Thêm shipper
 @app.post("/Shipper/upload-data", description = 'Add shipper from file_csv')
-async def upload_csv_file(file: UploadFile, db: Session = Depends(get_db)):
+async def upload_csv_shippers_file(file: UploadFile, db: Session = Depends(get_db)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File is not a CSV")
     
@@ -286,7 +278,7 @@ async def upload_csv_file(file: UploadFile, db: Session = Depends(get_db)):
 
 # 3. Thêm sản phẩm
 @app.post("/products/upload-data", description = "Upload CSV file to import customers")
-async def upload_csv_file(file: UploadFile, db: Session = Depends(get_db)):
+async def upload_csv_products_file(file: UploadFile, db: Session = Depends(get_db)):
     # Kiểm tra định dạng file
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File is not a CSV")
@@ -331,7 +323,7 @@ async def upload_csv_file(file: UploadFile, db: Session = Depends(get_db)):
         db.add_all(products)
         db.commit()
 
-        return "==> CSV file uploaded success <=="
+        return "CSV file uploaded success"
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -359,32 +351,39 @@ async def upload_csv_to_customers(file: UploadFile , db: Session = Depends(get_d
         db.add_all(customers)
         db.commit()
 
-        return {"message": "Thêm khách hàng thành công!", "count": len(customers)}
+        return {"message": "Added customers successfully!", "count": len(customers)}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/categories/", response_model=schema.Category)
-def create_category(category: schema.Category, db: Session = Depends(get_db)):
-    # Tạo một đối tượng thể loại sản phẩm từ dữ liệu được gửi lên
-    db_category = model.Category(**category.dict())
+# 5. Thêm nhà cung cấp
+@app.post("/supplier")
+def create_supplier(sup: schema.SupplierCreate, db: Session = Depends(get_db)):
+    existing_supplier = db.query(model.Supplier).filter(
+        model.Supplier.CompanyName == sup.CompanyName,
+        model.Supplier.ContactName == sup.ContactName,
+        model.Supplier.ContactTitle == sup.ContactTitle,
+        model.Supplier.PostalCode == sup.PostalCode
+    ).first()
     
-    # Thêm đối tượng thể loại sản phẩm vào cơ sở dữ liệu
-    db.add(db_category)
+    if existing_supplier:
+        raise HTTPException(status_code=400, detail="This supplier already exists in the database.")
+    
+    df = pd.DataFrame.from_dict(sup.dict(), orient='index').T
+    if (df['PostalCode'].str.len() > 10).any():
+        raise HTTPException(status_code=400, detail="PostalCode length limited to 10 characters.")
     
     try:
-        # Commit thay đổi vào cơ sở dữ liệu
+        db_sup = df.to_dict(orient='records')[0]
+        db.add(model.Supplier(**db_sup))
         db.commit()
-        # Làm mới đối tượng để lấy thông tin đã được lưu vào cơ sở dữ liệu
-        db.refresh(db_category)
-        return db_category
+        return {"Message":'Add supplier is successful', "Detail": db_sup}
     except Exception as e:
-        # Xử lý lỗi nếu có lỗi trong quá trình tạo mới
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Failed to create category: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to create supplier: {str(e)}")
     
 
+# 6. Thêm hóa đơn
 @app.post("/orders/")
 def create_order(order: schema.OrderCreate, db: Session = Depends(get_db)):
     # Validate order data using NumPy

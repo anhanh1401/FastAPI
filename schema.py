@@ -4,17 +4,6 @@ from decimal import Decimal
 from pydantic import BaseModel
 from typing import Union, List
 
-
-class OrderDetails(BaseModel):
-    OrderID : int
-    ProductID : int
-    UnitPrice : float
-    Quantity : int
-    Discount : float
-
-    class Config:
-        from_attributes = True
-
 class Product(BaseModel):
     ProductID : int
     ProductName : str
@@ -30,10 +19,69 @@ class Product(BaseModel):
     class Config:
         from_attributes = True
 
+class OrderDetails(BaseModel):
+    OrderID : int
+    ProductID : int
+    UnitPrice : float
+    Quantity : int
+    Discount : float
+
+    class Config:
+        from_attributes = True
+
+# post order
+class OrderProductCreate(BaseModel):
+    ProductID: int
+    Quantity: int
+    UnitPrice: float
+    Discount: float
+
+class OrderCreate(BaseModel):
+    CustomerID: str
+    EmployeeID: int
+    OrderDate: datetime
+    Products: List[OrderProductCreate]
+
+class Customer(BaseModel):
+    CustomerID : str
+    CompanyName : str
+    ContactName : str
+    ContactTitle : str
+    Address : str
+    City : str
+    PostalCode : str
+    Country : str
+    Phone : str
+    Fax : str
+
+    class Config:
+        from_attributes = True
+
 class Shipper(BaseModel):
     ShipperID: int
     CompanyName: str
     Phone: str
+    class Config:
+        from_attributes = True
+
+class SupplierBase(BaseModel):
+    CompanyName :str
+    ContactName :str
+    ContactTitle :str
+    Address :str
+    City :str
+    Region :str
+    PostalCode :str
+    Country :str
+    Phone :str
+    Fax :str
+    HomePage :str
+
+class SupplierCreate(SupplierBase):
+    pass
+
+class Supplier(SupplierBase):
+    SupplierID: int
     class Config:
         from_attributes = True
 
@@ -72,32 +120,8 @@ class YearlyRevenue(BaseModel):
     # class Config:
     #     from_attributes = True
 
-class Customer(BaseModel):
-    CustomerID : str
-    CompanyName : str
-    ContactName : str
-    ContactTitle : str
-    Address : str
-    City : str
-    PostalCode : str
-    Country : str
-    Phone : str
-    Fax : str
-
-    class Config:
-        from_attributes = True
 
 
-class OrderProductCreate(BaseModel):
-    ProductID: int
-    Quantity: int
-    UnitPrice: float
-    Discount: float
 
-class OrderCreate(BaseModel):
-    CustomerID: str
-    EmployeeID: int
-    OrderDate: datetime
-    Products: List[OrderProductCreate]
 
     

@@ -6,6 +6,7 @@ from .database import Base
 
 class Product(Base):
     __tablename__ = 'products'
+
     ProductID = Column(Integer, primary_key=True, autoincrement=True)
     ProductName = Column(String(40))
     SupplierID = Column(Integer,ForeignKey('suppliers.SupplierID'))
@@ -50,19 +51,23 @@ class Orders(Base):
 
 class Customer(Base):
     __tablename__ = 'customers'
+
     CustomerID = Column(String(5), primary_key=True)
     CompanyName = Column(String(40))
     ContactName = Column(String(30))
     ContactTitle = Column(String(30))
     Address = Column(String(60))
     City = Column(String(15))
+    PostalCode = Column(String(10))
     Country = Column(String(15))
     Phone = Column(String(24))
+    Fax = Column(String(24))
 
     orders = relationship("Orders", back_populates="customer")    
 
 class Category(Base):
     __tablename__ = 'categories'
+
     CategoryID = Column(Integer, primary_key=True, autoincrement = True)
     CategoryName = Column(String(15))
     Description = Column(Text)
@@ -72,6 +77,7 @@ class Category(Base):
 
 class Supplier(Base):
     __tablename__ = 'suppliers'
+
     SupplierID = Column(Integer, primary_key=True, autoincrement=True)
     CompanyName = Column(String(40))
     ContactName = Column(String(30))
@@ -86,19 +92,12 @@ class Supplier(Base):
     HomePage = Column(Text)
 
     product = relationship("Product", back_populates="supplier")
+
 class Shipper(Base):
     __tablename__ = "shippers"
+    
     ShipperID= Column(Integer, primary_key=True, autoincrement=True)
     CompanyName= Column(String(40))
     Phone = Column(String(24))
 
 
-# class Item(Base):
-#     __tablename__ = "items"
-
-#     id = Column(Integer, primary_key=True, index=True)
-#     title = Column(String, index=True)
-#     description = Column(String, index=True)
-#     owner_id = Column(Integer, ForeignKey("users.id"))
-
-#     owner = relationship("User", back_populates="items")
